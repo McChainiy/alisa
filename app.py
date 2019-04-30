@@ -76,8 +76,8 @@ class UsersModel:
         cursor = self.connection.cursor()
         logging.warning('{}, {} TRYING'.format(name, record))
         cursor.execute('''UPDATE users
-                          SET record = {}
-                          WHERE user_name = {}'''.format(record, name))
+                          SET record = ?
+                          WHERE user_name = ?''', (record, name))
         logging.warning('GOT IT')
         cursor.close()
         self.connection.commit()
@@ -167,14 +167,31 @@ def handle_dialog(res, req):
                 res['response']['text'] = 'С возвращением {}'.format(first_name)
                 sessionStorage[user_id]['first_name'] = first_name
             else:
-                user_model.insert(first_name, 0)
+                user_model.insert(first_name.lower(), 0)
                 sessionStorage[user_id]['first_name'] = first_name
                 res['response'][
-                    'text'] = 'Приятно познакомиться, ' + first_name.title() \
+                    'text'] = 'Приятно познакомиться, ' + user_model.get_by_name(first_name)[1].title() \
                               + '. Я - Алиса. Я могу проверить тебя на скорость печати!'
 
             return
     command = req['request']['command'].split()
+
+    if game_params['active_game'] == 'namerecord':
+        user = user_model.get_by_name(''.join(command).lower())
+        if user:
+            res['response']['text'] = '{} - {} очков'.format(user[1], user[2])
+            game_params['active_game'] = False
+            return
+        elif ''.join(command).lower() in ['забей', 'stop', 'хватит', 'нетоимя',
+        'стоп', 'остановись', 'все']:
+            game_params['active_game'] = False
+            res['response']['text'] = \
+            'Ok!'
+            return
+        else:
+            res['response']['text'] = \
+            'Такого у нас нет! Поищите других или скажите "забей"'
+            return
 
     if not game_params['active_game']:
         if ''.join(command).lower() == 'start':
@@ -184,18 +201,18 @@ def handle_dialog(res, req):
             game_params['level'] = 1
             game_params['active_game'] = True
             return_word(res)
-        # elif ''.join(command).lower() == 'top':
-        #     for i in range(min([len(maxrec), 3])):
-        #         print(maxrec[i])
-        # elif ''.join(command).lower() == 'namerecord':
-        #     res['response']['text'] = 'Введите имя рекордсмена'
-        #     recname = input()
-        #     for i in maxrec:
-        #         if i.split('- ')[1] == recname:
-        #             print('У', recname, i.split()[0], 'очков')
-        #             break
-        #     else:
-        #         res['response']['text'] = 'Такого игрока нет'
+        elif ''.join(command).lower() == 'top':
+            top = sorted(user_model.get('all'), key=lambda x: -x[2])
+            endd = 10 if len(top) > 10 else len(top)
+            text_to_send = ''
+            for i in top[:endd]:
+                text_to_send += '{} - {} очков\n'.format(i[1], i[2])
+            res['response']['text'] = text_to_send
+            return
+        elif ''.join(command).lower() == 'namerecord':
+            res['response']['text'] = 'Введите имя рекордсмена'
+            game_params['active_game'] = 'namerecord'
+            return
         else:
             res['response']['text'] = 'Такой команды нет\nstart - начало' \
                                       ' игры\ntop - лидеры\nname record - рекорд игрока'
@@ -220,17 +237,16 @@ def handle_dialog(res, req):
             text_to_send = ''
             text_to_send += '\nУ вас закончились жизни. Cчет - {}\n'.\
                 format(game_params['scores'])
-            game_params['active_game'] = True
+            game_params['active_game'] = False
 
             host = user_model.get_by_name(sessionStorage[user_id]['first_name'])
-            # text_to_send += str(host[2])
             if host[2] != 0:
                 if host[2] < game_params['scores']:
                     text_to_send += '\nУ вас новый рекорд!'
-                    user_model.update_rec(host[1], host[2])
+                    user_model.update_rec(host[1], game_params['scores'])
             else:
                 text_to_send += '\nВаш первый рекорд!'
-                user_model.update_rec(host[1], host[2])
+                user_model.update_rec(host[1], game_params['scores'])
             res['response']['text'] = text_to_send
             return
 
@@ -241,52 +257,6 @@ def handle_dialog(res, req):
             res['response']['text'] = 'Очков:{}\nУровень:{}\nПодряд:{}\nЖизней:{}'.format(
             game_params['scores'], game_params['level'], game_params['inrow'], game_params['lives'])
         return_word(res)
-
-    # while lives > 0:
-    #     for i in range(3, 0, -1):
-    #         print(i)
-    #         print('. . .')
-    #         time.sleep(0.5)
-    #     sent, maxtime = decor(level)
-    #     print(sent)
-    #     time1 = time.time()
-    #     vvod = input()
-    #     time2 = time.time()
-    #     differ = time2 - time1
-    #     if vvod != sent or differ > maxtime:
-    #         lives -= 1
-    #         inrow = 0
-    #     else:
-    #         inrow += 1
-    #         level += 1
-    #         scores += int((len(sent) * (maxtime - differ) * (inrow * 0.5)))
-    #     if inrow % 10 == 0 and inrow != 0:
-    #         lives += 1
-    #         level -= 1
-    #     print('Очков:{}\tУровень:{}\tПодряд:{}\tЖизней:{}'.format(
-    #         scores, level, inrow, lives))
-
-
-    ###############################
-
-
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-
 
 def return_word(res):
     #time.sleep(0.5)
