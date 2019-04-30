@@ -1,9 +1,15 @@
 from flask import Flask, request
+
 import logging
+
 import json
+
 from swift import words
+
 import random, time, math
+
 from geo import get_distance, get_geo_info
+
 import requests
 
 import sqlite3
@@ -11,7 +17,9 @@ import sqlite3
 
 app = Flask(__name__)
 
-logging.basicConfig(level=logging.INFO, filename='logging.log', format='%(asctime)s %(levelname)s %(name)s %(message)s')
+logging.basicConfig(level=logging.INFO, filename='logging.log',
+    format='%(asctime)s %(levelname)s %(name)s %(message)s')
+
 logging.warning('start')
 
 
@@ -39,6 +47,7 @@ class UsersModel:
                                  record INTEGER
                                  )''')
         cursor.close()
+
         self.connection.commit()
 
     def insert(self, user_name, record):
@@ -47,6 +56,7 @@ class UsersModel:
                           (user_name, record)
                           VALUES (?,?)''', (user_name, record))
         cursor.close()
+
         self.connection.commit()
 
     def get(self, user_id):
@@ -57,12 +67,14 @@ class UsersModel:
         else:
             cursor.execute("SELECT * FROM users WHERE id = ?", [str(user_id)])
             row = cursor.fetchone()
+
         return row
 
     def get_by_name(self, name):
         cursor = self.connection.cursor()
         cursor.execute("SELECT * FROM users WHERE user_name = ?", [name])
         row = cursor.fetchone()
+
         return row
 
     def correct_user(self, user_name, password_hash):
@@ -70,6 +82,7 @@ class UsersModel:
         cursor.execute("SELECT * FROM users WHERE user_name = ? AND password_hash = ?",
                        (user_name, password_hash))
         row = cursor.fetchone()
+
         return (True, row[0]) if row else (False,)
 
     def update_rec(self, name, record):
@@ -94,7 +107,8 @@ class UsersModel:
 
 def decor(lvl):
     sentence = ' '.join([random.choice(words) for i in range(lvl // 3 + 1)])
-    times = math.sqrt(len(sentence)) * 6.25 - 6
+    times = len(sentence) / 2.4 + 4
+
     return sentence, times
 
 
@@ -189,6 +203,12 @@ def handle_dialog(res, req):
         if user:
             res['response']['text'] = '{} - {} очков'.format(user[1], user[2])
             game_params['active_game'] = False
+            suggests = []
+            suggests.append({'title': 'start', 'hide': True})
+            suggests.append({'title': 'top', 'hide': True})
+            suggests.append({'title': 'name record', 'hide': True})
+            suggests.append({'title': 'помощь', 'hide': True})
+            res['response']['buttons'] = suggests
             return
         elif ''.join(command).lower() in\
                 [
@@ -202,10 +222,19 @@ def handle_dialog(res, req):
                 ]:
             game_params['active_game'] = False
             res['response']['text'] = 'Ok!'
+            suggests = []
+            suggests.append({'title': 'start', 'hide': True})
+            suggests.append({'title': 'top', 'hide': True})
+            suggests.append({'title': 'name record', 'hide': True})
+            suggests.append({'title': 'помощь', 'hide': True})
+            res['response']['buttons'] = suggests
             return
         else:
             res['response']['text'] = \
                 'Такого у нас нет! Поищите других или скажите "забей"'
+            suggests = []
+            suggests.append({'title': 'не то имя', 'hide': True})
+            res['response']['buttons'] = suggests
             return
 
     if game_params['active_game'] == 'pause':
@@ -219,6 +248,9 @@ def handle_dialog(res, req):
                 ]:
             game_params['active_game'] = True
             return_word(res)
+            suggests = []
+            suggests.append({'title': 'пауза', 'hide': True})
+            res['response']['buttons'] = suggests
             return
         elif ''.join(command).lower() in\
                 [
@@ -235,6 +267,11 @@ def handle_dialog(res, req):
             text_to_send += '\nЖизней:{}\n'.format(game_params['lives'])
             text_to_send += '\n'
             res['response']['text'] = text_to_send
+            suggests = []
+            suggests.append({'title': 'го', 'hide': True})
+            suggests.append({'title': 'все', 'hide': True})
+            suggests.append({'title': 'статистика', 'hide': True})
+            res['response']['buttons'] = suggests
             return
         elif ''.join(command).lower() in\
                 [
@@ -258,9 +295,20 @@ def handle_dialog(res, req):
                 text_to_send += '\nВаш первый рекорд!'
                 user_model.update_rec(host[1], game_params['scores'])
             res['response']['text'] = text_to_send
+            suggests = []
+            suggests.append({'title': 'start', 'hide': True})
+            suggests.append({'title': 'top', 'hide': True})
+            suggests.append({'title': 'name record', 'hide': True})
+            suggests.append({'title': 'помощь', 'hide': True})
+            res['response']['buttons'] = suggests
             return
         else:
             res['response']['text'] = 'Ну что? Так и будешь отдыхать?'
+            suggests = []
+            suggests.append({'title': 'го', 'hide': True})
+            suggests.append({'title': 'все', 'hide': True})
+            suggests.append({'title': 'статистика', 'hide': True})
+            res['response']['buttons'] = suggests
             return
 
     if not game_params['active_game']:
@@ -270,6 +318,9 @@ def handle_dialog(res, req):
             game_params['inrow'] = 0
             game_params['level'] = 1
             game_params['active_game'] = True
+            suggests = []
+            suggests.append({'title': 'пауза', 'hide': True})
+            res['response']['buttons'] = suggests
             return_word(res)
         elif ''.join(command).lower() == 'top':
             top = sorted(user_model.get('all'), key=lambda x: -x[2])
@@ -282,16 +333,14 @@ def handle_dialog(res, req):
             suggests.append({'title': 'start', 'hide': True})
             suggests.append({'title': 'top', 'hide': True})
             suggests.append({'title': 'name record', 'hide': True})
+            suggests.append({'title': 'помощь', 'hide': True})
             res['response']['buttons'] = suggests
             return
         elif ''.join(command).lower() == 'namerecord':
             res['response']['text'] = 'Введите имя рекордсмена'
             game_params['active_game'] = 'namerecord'
             suggests = []
-            suggests.append({'title': 'start', 'hide': True})
-            suggests.append({'title': 'top', 'hide': True})
-            suggests.append({'title': 'name record', 'hide': True})
-            suggests.append({'title': 'помощь', 'hide': True})
+            suggests.append({'title': 'забей', 'hide': True})
             res['response']['buttons'] = suggests
             return
         elif ''.join(command).lower() == 'помощь':
@@ -304,11 +353,23 @@ def handle_dialog(res, req):
                                       '2. top - выводит топ 10 игроков\n' \
                                       '3. name record - после введения этой команды нужно написать' \
                                       'имя человека, рекорд которого вы хотите узнать'
+            suggests = []
+            suggests.append({'title': 'start', 'hide': True})
+            suggests.append({'title': 'top', 'hide': True})
+            suggests.append({'title': 'name record', 'hide': True})
+            suggests.append({'title': 'помощь', 'hide': True})
+            res['response']['buttons'] = suggests
         else:
             res['response']['text'] = 'Такой команды нет' \
                                       '\nstart - начало игры' \
                                       '\ntop - лидеры' \
                                       '\nname record - рекорд игрока'
+            suggests = []
+            suggests.append({'title': 'start', 'hide': True})
+            suggests.append({'title': 'top', 'hide': True})
+            suggests.append({'title': 'name record', 'hide': True})
+            suggests.append({'title': 'помощь', 'hide': True})
+            res['response']['buttons'] = suggests
 
     else:
         if ''.join(command).lower() in\
@@ -329,19 +390,44 @@ def handle_dialog(res, req):
             game_params['active_game'] = 'pause'
             res['response']['text'] = text_to_send
             game_params['inrow'] = 0
+            suggests = []
+            suggests.append({'title': 'го', 'hide': True})
+            suggests.append({'title': 'все', 'hide': True})
+            suggests.append({'title': 'статистика', 'hide': True})
+            res['response']['buttons'] = suggests
             return
         text_to_send = ''
         game_params['time2'] = time.time()
         differ = game_params['time2'] - game_params['time1']
-        if ' '.join(command).lower() != game_params['sent'].lower() or differ\
-                > game_params['maxtime']:
+        lizd = []
+        if ' '.join(command).lower() != game_params['sent'].lower():
             game_params['lives'] -= 1
             game_params['inrow'] = 0
+            lizd.append('ошибка в написании')
+            lizd.append('Очков:{}\nУровень:{}\nПодряд:{}\nЖизней:{}'.format(
+                game_params['scores'], game_params['level'],
+                game_params['inrow'], game_params['lives']))
+            suggests = []
+            suggests.append({'title': 'пауза', 'hide': True})
+            res['response']['buttons'] = suggests
+        elif differ > game_params['maxtime']:
+            game_params['lives'] -= 1
+            game_params['inrow'] = 0
+            lizd.append('вышло время')
+            lizd.append('Очков:{}\nУровень:{}\nПодряд:{}\nЖизней:{}'.format(
+                game_params['scores'], game_params['level'],
+                game_params['inrow'], game_params['lives']))
+            suggests = []
+            suggests.append({'title': 'пауза', 'hide': True})
+            res['response']['buttons'] = suggests
         else:
             game_params['inrow'] += 1
             game_params['level'] += 1
             game_params['scores'] += int(len(game_params['sent']) * (
                 game_params['maxtime'] - differ) * (game_params['inrow'] * 0.5))
+            suggests = []
+            suggests.append({'title': 'пауза', 'hide': True})
+            res['response']['buttons'] = suggests
 
         if game_params['lives'] <= 0:
             # res['response']['text'] = 'КОНЕЦ.....\n{}\n'.format(game_params['lives'])
@@ -360,6 +446,12 @@ def handle_dialog(res, req):
                 text_to_send += '\nВаш первый рекорд!'
                 user_model.update_rec(host[1], game_params['scores'])
             res['response']['text'] = text_to_send
+            suggests = []
+            suggests.append({'title': 'start', 'hide': True})
+            suggests.append({'title': 'top', 'hide': True})
+            suggests.append({'title': 'name record', 'hide': True})
+            suggests.append({'title': 'помощь', 'hide': True})
+            res['response']['buttons'] = suggests
             return
 
         if game_params['inrow'] % 10 == 0 and game_params['inrow'] != 0:
@@ -367,13 +459,16 @@ def handle_dialog(res, req):
             game_params['level'] -= 1
             res['response']['text'] = 'Очков:{}\nУровень:{}\nПодряд:{}\nЖизней:{}'.format(
             game_params['scores'], game_params['level'], game_params['inrow'], game_params['lives'])
-        return_word(res)
+        return_word(res, lizd)
 
 
-def return_word(res):
+def return_word(res, lizd=[]):
     #time.sleep(0.5)
     sent, maxtime = decor(game_params['level'])
     text_to_send = ''
+    for i in lizd:
+        text_to_send += '{}\n'.format(i)
+    text_to_send += '\n'
     text_to_send += sent
     res['response']['text'] = text_to_send
     game_params['sent'] = sent
