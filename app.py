@@ -144,7 +144,7 @@ def handle_dialog(res, req):
         }
         game_params['active_game'] = False
         game_params['scores'] = 0
-        game_params['lives'] = 1
+        game_params['lives'] = 2
         game_params['inrow'] = 0
         game_params['level'] = 1
         return
@@ -193,10 +193,47 @@ def handle_dialog(res, req):
             'Такого у нас нет! Поищите других или скажите "забей"'
             return
 
+    if game_params['active_game'] == 'pause':
+        if ''.join(command).lower() in ['go', 'го', 'погнали', "продолжаем",
+        "вперед"]:
+            game_params['active_game'] = True
+            return_word(res)
+            return
+        elif ''.join(command).lower() in ['stats', 'stata', "стата",
+        "статистика", "очки"]:
+            text_to_send = ''
+            text_to_send += 'Очков:{}'.format(game_params['scores'])
+            text_to_send += '\nУровень:{}'.format(game_params['level'])
+            text_to_send += '\nПодряд:{}'.format(game_params['inrow'])
+            text_to_send += '\nЖизней:{}\n'.format(game_params['lives'])
+            text_to_send += '\n'
+            res['response']['text'] = text_to_send
+            return
+        elif ''.join(command).lower() in ["все", "хватит", "наигрался", "конец",
+        "стопигра"]:
+            text_to_send = ''
+            text_to_send += '\nКонец игры. Cчет - {}\n'.\
+                format(game_params['scores'])
+            game_params['active_game'] = False
+
+            host = user_model.get_by_name(sessionStorage[user_id]['first_name'])
+            if host[2] != 0:
+                if host[2] < game_params['scores']:
+                    text_to_send += '\nУ вас новый рекорд!'
+                    user_model.update_rec(host[1], game_params['scores'])
+            else:
+                text_to_send += '\nВаш первый рекорд!'
+                user_model.update_rec(host[1], game_params['scores'])
+            res['response']['text'] = text_to_send
+            return
+        else:
+            res['response']['text'] = 'Ну что? Так и будешь отдыхать?'
+            return
+
     if not game_params['active_game']:
         if ''.join(command).lower() == 'start':
             game_params['scores'] = 0
-            game_params['lives'] = 1
+            game_params['lives'] = 2
             game_params['inrow'] = 0
             game_params['level'] = 1
             game_params['active_game'] = True
@@ -218,6 +255,17 @@ def handle_dialog(res, req):
                                       ' игры\ntop - лидеры\nname record - рекорд игрока'
 
     else:
+        if ''.join(command).lower() in ['стоп', 'stop', 'stata', 'стата',
+        'статистика', 'pause', 'пауза']:
+            text_to_send = ''
+            text_to_send += 'Очков:{}'.format(game_params['scores'])
+            text_to_send += '\nУровень:{}'.format(game_params['level'])
+            text_to_send += '\nПодряд:{}'.format(game_params['inrow'])
+            text_to_send += '\nЖизней:{}\n'.format(game_params['lives'])
+            game_params['active_game'] = 'pause'
+            res['response']['text'] = text_to_send
+            game_params['inrow'] = 0
+            return
         text_to_send = ''
         game_params['time2'] = time.time()
         differ = game_params['time2'] - game_params['time1']
@@ -228,8 +276,8 @@ def handle_dialog(res, req):
         else:
             game_params['inrow'] += 1
             game_params['level'] += 1
-            game_params['scores'] += int((len(game_params['sent']) * (
-                    game_params['maxtime'] - differ) * (game_params['inrow'] * 0.5)))
+            game_params['scores'] += int(len(game_params['sent']) * (
+                game_params['maxtime'] - differ) * (game_params['inrow'] * 0.5))
 
         if game_params['lives'] <= 0:
             # res['response']['text'] = 'КОНЕЦ.....\n{}\n'.format(game_params['lives'])
@@ -262,12 +310,6 @@ def return_word(res):
     #time.sleep(0.5)
     sent, maxtime = decor(game_params['level'])
     text_to_send = ''
-    text_to_send += 'Очков:{}'.format(game_params['scores'])
-    text_to_send += '\nУровень:{}'.format(game_params['level'])
-    text_to_send += '\nПодряд:{}'.format(game_params['inrow'])
-    text_to_send += '\nЖизней:{}\n'.format(game_params['lives'])
-    text_to_send += '\nmaxtime:{}'.format(maxtime)
-    text_to_send += '\n\n'
     text_to_send += sent
     res['response']['text'] = text_to_send
     game_params['sent'] = sent
