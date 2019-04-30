@@ -8,8 +8,6 @@ from swift import words
 
 import random, time, math
 
-from geo import get_distance, get_geo_info
-
 import requests
 
 import sqlite3
